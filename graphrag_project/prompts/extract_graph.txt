@@ -1,0 +1,73 @@
+
+-Goal-
+Given a text document that is potentially relevant to this activity, first identify all entities needed from the text in order to capture the information and ideas in the text.
+Next, report all relationships among the identified entities.
+
+-Steps-
+1. Identify all entities. For each identified entity, extract the following information:
+- entity_name: Name of the entity, capitalized
+- entity_type: Suggest several labels or categories for the entity. The categories should not be specific, but should be as general as possible.
+- entity_description: Comprehensive description of the entity's attributes and activities
+Format each entity as ("entity"<|><entity_name><|><entity_type><|><entity_description>)
+
+2. From the entities identified in step 1, identify all pairs of (source_entity, target_entity) that are *clearly related* to each other.
+For each pair of related entities, extract the following information:
+- source_entity: name of the source entity, as identified in step 1
+- target_entity: name of the target entity, as identified in step 1
+- relationship_type: ONE of exactly: is-a | part-of | defines | special-case-of | used-in | related-to
+- relationship_description: explanation as to why you think the source entity and the target entity are related to each other
+- relationship_strength: a numeric score indicating strength of the relationship between the source entity and target entity
+Format each relationship as ("relationship"<|><source_entity><|><target_entity><|><relationship_type><|><relationship_description><|><relationship_strength>)
+
+3. Return output in Traditional Chinese as a single list of all the entities and relationships identified in steps 1 and 2. Use **##** as the list delimiter.
+
+4. If you have to translate into Traditional Chinese, just translate the descriptions, nothing else!
+
+5. When finished, output <|COMPLETE|>.
+
+-Examples-
+######################
+
+Example 1:
+
+text:
+唐朝時期的經濟 一般稱為唐代經濟 是指七世紀到十世紀初唐帝國統治的中原 江南 四川與嶺南等地區的經濟發展 一般認為此時期是中國經濟由上古逐漸轉為中世的關鍵時期
+綜述
+財政制度
+唐初戶等沿襲隋朝制度 武德初 行三等戶制 武德七年 624年 四月 唐朝頒佈均田制 唐 均田令和租庸調制 租庸調
+唐朝廷將一部分官田設為賜田 供貴族 官吏 功臣 公廨田 供官署 驛田 供驛站 屯田 供軍政 而剩餘田地實行均田制 唐 均田制分配於眾 均田令規定政府依戶籍授田 所授田地分公私兩田區 是一種公私折中的制度 人口三歲或以下為黃 四歲或以上為小 十六歲或以上為中 廿一歲或以上為丁 六十歲或以上為老 丁男和十八歲以上的中男授田一市制 頃 公田八十畝 私田二十畝 老男和殘障人授田四十畝 寡妻妾授田卅畝 和尚道士每人授田卅畝 尼姑女冠則有廿畝 奴婢 婦人及耕牛不受田地 貴族 官吏和勳官則分別按其戚親近遠 品級高低 功勳大小分配適當的私田 相較隋朝 唐朝對土地的買賣寬鬆了許多 但仍有嚴格的限制 均田制不僅有助於確保朝廷財政收入和滿足上層貴族官僚對地產的需求 同時它也對唐初生產力的複蘇起到了關鍵性的作用
+唐朝課役 即賦稅和徭役 分徭役 正役兩種 正役只徵收丁男 而徭役亦徵中男 徭役有雜徭 色役兩種 雜徭多為地方的臨時補修建築工作 色役多為各類工匠藝活 正役包括稅 稅役和徵兵制 兵役 稅役又有按照租庸調制收納的正稅與地稅和戶稅兩種輔助稅 租庸調法是與均田制配套實行的賦役制度 租庸調按丁徵收 每丁每年交納小米 粟二石 容量單位 石 稱為 租 根據各地的不同生產 每年交納絹二仞 丈 錦三兩 兩 或布二丈五尺 麻三斤 稱為 調 每丁每年要服徭役廿日 置閏 閏月 閏月加兩日 如果不想服徭役 每天折納絹三尺或布三尺七寸五分 稱為 庸 如果政府額外加役 十五日 免調 卅日 租調全免 額外加役最多不可超過卅日 這種制度精神在於政府�
+------------------------
+output:
+("entity"<|>認股證<|>金融工具<|>又稱權證或窩輪，是一種有價證券，允許持有人在特定期間內按約定價格購買或出售標的證券，或以現金結算差價) ## ("entity"<|>發行人<|>組織角色<|>指發行認股證的標的證券公司或其以外的第三人，如上市公司、證券公司或投資銀行) ## ("entity"<|>持有人<|>角色<|>擁有認股證並享有在約定條件下購買或出售標的證券權利的投資者) ## ("entity"<|>標的證券<|>金融資產<|>認股證所掛鉤的基礎資產，通常為股票或其他證券) ## ("entity"<|>認購權證<|>金融工具<|>一種認股證，賦予持有人在特定期限內按行使價購買標的證券的權利，其價值與標的證券價格同向變動) ## ("entity"<|>認沽權證<|>金融工具<|>一種認股證，賦予持有人在特定期限內按行使價出售標的證券的權利，其價值與標的證券價格反向變動) ## ("entity"<|>股本權證<|>金融工具<|>由上市公司發行，行權時會增發新股，導致標的證券股本總額增加的權證) ## ("entity"<|>備兌權證<|>金融工具<|>由標的證券發行人以外的第三方（如券商）發行，行權時不會造成總股本增加的權證) ## ("entity"<|>美式權證<|>金融工具<|>一種按行權期限分類的權證，允許持有人在到期日前的任一交易日行權) ## ("entity"<|>歐式權證<|>金融工具<|>一種按行權期限分類的權證，僅允許持有人在到期日當天生效行權) ## ("entity"<|>百慕達式權證<|>金融工具<|>一種介於美式與歐式之間的權證，具有多個特定行權日或一段行權期) ## ("entity"<|>證券交易所<|>組織<|>提供認股證等金融產品集中交易場所的機構) ## ("relationship"<|>發行人<|>認股證<|>related-to<|>發行人負責發行認股證並約定相關條款<|>9) ## ("relationship"<|>持有人<|>認股證<|>related-to<|>持有人擁有認股證賦予的購買或出售權利<|>9) ## ("relationship"<|>認股證<|>標的證券<|>related-to<|>認股證的價值與權利行使均基於標的證券的價格表現<|>8) ## ("relationship"<|>認購權證<|>認股證<|>special-case-of<|>認購權證是認股證的一種分類，代表看漲的選擇權<|>9) ## ("relationship"<|>認沽權證<|>認股證<|>special-case-of<|>認沽權證是認股證的一種分類，代表看跌的選擇權<|>9) ## ("relationship"<|>股本權證<|>認股證<|>special-case-of<|>股本權證是依據發行人身份區分的認股證類型之一<|>8) ## ("relationship"<|>備兌權證<|>認股證<|>special-case-of<|>備兌權證是依據發行人身份區分的認股證類型之一<|>8) ## ("relationship"<|>美式權證<|>認股證<|>special-case-of<|>美式權證是依據行權期限區分的認股證類型，具有靈活的行權時間<|>8) ## ("relationship"<|>歐式權證<|>認股證<|>special-case-of<|>歐式權證是依據行權期限區分的認股證類型，僅限到期日行權<|>8) ## ("relationship"<|>百慕達式權證<|>認股證<|>special-case-of<|>百慕達式權證是依據行權期限區分的認股證類型，結合了美式與歐式的特點<|>8) ## ("relationship"<|>證券交易所<|>認股證<|>related-to<|>證券交易所是認股證進行場內交易的場所<|>7) <|COMPLETE|>
+#############################
+
+
+Example 2:
+
+text:
+�是李澈和李滋 按照漢人起名的習慣 李冶作為三兄弟之一 名也應該是五行帶水的 餘嘉錫在 四庫提要辨證 中亦詳加考證 說明李冶原來應該叫李治 但後來改為冶
+注釋
+參考文獻
+引用
+來源
+書籍
+外部連結
+收集了一些李冶的詩作
+參見
+秦九韶
+朱世傑
+天元術
+籌算
+------------------------
+output:
+("entity"<|>認股證<|>FINANCIAL_INSTRUMENT<|>又稱權證或窩輪，是一種有價證券，約定持有人在規定期間內或特定到期日，有權按約定價格向發行人購買或出售標的證券，或以現金結算方式收取結算差價) ## ("entity"<|>發行人<|>ORGANIZATION<|>發行認股證的實體，可以是標的證券的發行人或其以外的第三人，如上市公司、證券公司或投資銀行) ## ("entity"<|>標的證券<|>FINANCIAL_INSTRUMENT<|>認股證所關聯的基礎資產，持有人可依約購買或出售的證券) ## ("entity"<|>認購證<|>FINANCIAL_INSTRUMENT<|>認股證的一種，持有人有權在特定期限內按行使價購買相關資產，其價值與標的證券價格同向變化) ## ("entity"<|>認沽證<|>FINANCIAL_INSTRUMENT<|>認股證的一種，持有人有權在特定期限內按行使價出售相關資產，其價值與標的證券價格反向變化) ## ("entity"<|>股本權證<|>FINANCIAL_INSTRUMENT<|>由上市公司發行，標的為該公司或其子公司股票，行權時會增發股票導致總股本增加的權證) ## ("entity"<|>備兌權證<|>FINANCIAL_INSTRUMENT<|>由標的證券發行人以外的第三方（如證券公司、投資銀行）發行，行權時不會造成總股本增加的權證) ## ("entity"<|>美式權證<|>FINANCIAL_INSTRUMENT<|>持有人可以在權證到期日前的任一交易日行權的權證類型) ## ("entity"<|>歐式權證<|>FINANCIAL_INSTRUMENT<|>持有人只能在權證到期日當日行權的權證類型) ## ("entity"<|>百慕達式權證<|>FINANCIAL_INSTRUMENT<|>介於美式與歐式之間，具有多個行權日或一段行權期的權證類型) ## ("entity"<|>證券交易所<|>ORGANIZATION<|>進行權證等場內期權交易的場所) ## ("entity"<|>投資銀行<|>ORGANIZATION<|>常作為備兌權證發行人的金融機構) ## ("entity"<|>上市公司<|>ORGANIZATION<|>常作為股本權證發行人的企業實體) ## ("relationship"<|>發行人<|>認股證<|>related-to<|>發行人是發行認股證的主體，約定持有人的權利與義務<|>9) ## ("relationship"<|>認股證<|>標的證券<|>related-to<|>認股證的價值和行權標的是基於標的證券的價格變動<|>9) ## ("relationship"<|>認股證<|>認購證<|>special-case-of<|>認購證是認股證依據行權方向分類的其中一種類型<|>8) ## ("relationship"<|>認股證<|>認沽證<|>special-case-of<|>認沽證是認股證依據行權方向分類的其中一種類型<|>8) ## ("relationship"<|>認股證<|>股本權證<|>special-case-of<|>股本權證是認股證依據發行人不同而分類的其中一種類型<|>8) ## ("relationship"<|>認股證<|>備兌權證<|>special-case-of<|>備兌權證是認股證依據發行人不同而分類的其中一種類型<|>8) ## ("relationship"<|>認股證<|>美式權證<|>special-case-of<|>美式權證是認股證依據行權期限分類的其中一種類型<|>8) ## ("relationship"<|>認股證<|>歐式權證<|>special-case-of<|>歐式權證是認股證依據行權期限分類的其中一種類型<|>8) ## ("relationship"<|>認股證<|>百慕達式權證<|>special-case-of<|>百慕達式權證是認股證依據行權期限分類的其中一種類型<|>8) ## ("relationship"<|>上市公司<|>股本權證<|>related-to<|>上市公司通常是股本權證的發行人<|>8) ## ("relationship"<|>投資銀行<|>備兌權證<|>related-to<|>投資銀行通常作為第三方發行備兌權證<|>8) ## ("relationship"<|>證券交易所<|>認股證<|>related-to<|>證券交易所是認股證進行場內交易的場所<|>7) <|COMPLETE|>
+#############################
+
+
+
+-Real Data-
+######################
+text: {input_text}
+######################
+output:

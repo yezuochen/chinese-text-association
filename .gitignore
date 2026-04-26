@@ -1,0 +1,38 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+.obsidian
+
+# Database / tool configs
+*.base
+
+# Data
+data/
+*.parquet
+*.json
+*.log
+*.zip
+*.csv
+
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# GraphRAG
+graphrag_project/output/lancedb/
+graphrag_project/cache
+
+
+# Docs
+reports/
+scripts/report*
+scripts/test_nim.py

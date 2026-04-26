@@ -1,0 +1,39 @@
+[project]
+name = "hw"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.11"
+dependencies = [
+    # Core
+    "graphrag>=3.0.9",
+    "pandas>=2.3.3",
+    "pyarrow>=22.0.0",
+    "python-dotenv>=1.2.2",
+    # Preprocessing
+    "opencc-python-reimplemented>=0.1.7",
+    "jieba>=0.42.1",
+    # L2 embeddings (local, in-process; no server)
+    "flagembedding",
+    "torch>=2.5.0,<2.11",
+    # Graph / K-NN
+    "faiss-cpu",
+    "networkx",
+    "python-igraph",
+    "leidenalg",
+    # LLM / embedding clients
+    "openai",
+    "httpx",
+    "tqdm>=4.67.3",
+    "matplotlib>=3.10.9",
+    "scipy>=1.17.1",
+    "scikit-learn>=1.8.0",
+]
+
+[[tool.uv.index]]
+url = "https://download.pytorch.org/whl/cu121"
+name = "pytorch-cuda"
+explicit = true
+
+[tool.uv]
+override-dependencies = ["torch>=2.5.0,<2.11"]
+index-strategy = "unsafe-best-match"
