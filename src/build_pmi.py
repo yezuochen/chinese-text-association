@@ -92,9 +92,14 @@ def run() -> tuple[pd.DataFrame, pd.DataFrame]:
             doc_freq[t] += 1
             domain_counts[t][domain] += 1
 
-    # Filter to tokens with doc_freq >= 5
-    vocab = {t for t, c in doc_freq.items() if c >= 5}
-    print(f"Vocab (doc_freq >= 5): {len(vocab):,} tokens")
+    # Filter to tokens with doc_freq >= 5 AND doc_freq <= 0.30 * n (remove ultra-common stopwords).
+    # High-frequency cutoff removes collocation noise (左右/三十/主力) that passes length-based
+    # stopword filtering but dominate co-occurrence pairs at PMI >= 2.0.
+    # 0.30 threshold: tokens appearing in >30% of docs are generic Chinese function words or
+    # named entities (朝代年號, 數量詞, 地名) that corrupt concept graph without semantic value.
+    MAX_DOC_FREQ_RATIO = 0.30
+    vocab = {t for t, c in doc_freq.items() if c >= 5 and c / n <= MAX_DOC_FREQ_RATIO}
+    print(f"Vocab (doc_freq >= 5, <= {MAX_DOC_FREQ_RATIO:.0%} of corpus): {len(vocab):,} tokens")
 
     # pair_freq: co-doc counts for pairs within same doc (bag-of-tokens model)
     pair_freq: dict[tuple[str, str], int] = defaultdict(int)

@@ -2,7 +2,12 @@
 Stage 0: Preprocess corpus → processed/docs.csv
 
 In:  data/<domain>/*.txt  (9,943 files)
-Out: processed/docs.csv   (id, domain, title, text, char_count)
+Out: processed/docs.csv   (id, domain, title, text, char_count, filtered_reason)
+
+Hard filters applied:
+  - char_count < 50  → skip (embedding collapse on stubs)
+  - unique_token_count < 5  → skip (same)
+  - filtered_reason column added so embed_files.py can detect stub docs post-hoc
 
 Steps per file:
   1. Read UTF-8
@@ -83,11 +88,26 @@ def pick_title(lines, file_id):
     return str(file_id)
 
 
+def tokenize_for_count(text: str) -> list[str]:
+    import jieba
+    return [
+        tok
+        for tok in jieba.cut(text)
+        if (
+            len(tok) >= 2
+            and not tok.isdigit()
+            and not any("a" <= c <= "z" or "A" <= c <= "Z" for c in tok)
+        )
+    ]
+
+
 # ── Main ─────────────────────────────────────────────────────────────────────
 
 
 def run() -> pd.DataFrame:
+    import jieba
     rows = []
+    skipped = 0
     for domain_dir in sorted(DATA_DIR.iterdir()):
         if not domain_dir.is_dir():
             continue
@@ -97,8 +117,15 @@ def run() -> pd.DataFrame:
             raw = txt_path.read_text(encoding="utf-8")
             text_trad = cc.convert(raw)
             text_clean = scrub(text_trad)
+            char_count = len(text_clean)
+
+            # Hard filter: skip stubs that cause embedding collapse
+            unique_tokens = set(tokenize_for_count(text_clean))
+            if char_count < 50 or len(unique_tokens) < 5:
+                skipped += 1
+                continue
+
             title = pick_title(text_clean.splitlines(), file_id)
-            # Use first line of cleaned text for title if entire file was scrubbed away
             first_line = text_clean.split("\n", 1)[0]
             if len(first_line) > len(title) and len(first_line) < 200:
                 title = first_line
@@ -108,16 +135,17 @@ def run() -> pd.DataFrame:
                     "domain": domain,
                     "title": title,
                     "text": text_clean,
-                    "char_count": len(text_clean),
+                    "char_count": char_count,
+                    "filtered_reason": "",
                 }
             )
 
-    df = pd.DataFrame(rows, columns=["id", "domain", "title", "text", "char_count"])
+    df = pd.DataFrame(rows, columns=["id", "domain", "title", "text", "char_count", "filtered_reason"])
 
     OUT_FILE.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(OUT_FILE, index=False, quoting=1, encoding="utf-8-sig")
 
-    print(f"Written {len(df):,} rows to {OUT_FILE}")
+    print(f"Written {len(df):,} rows to {OUT_FILE} (skipped {skipped} stub files)")
     print(df["domain"].value_counts().to_string())
     return df
 

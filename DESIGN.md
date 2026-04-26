@@ -89,7 +89,7 @@ id,domain,title,text,char_count
 1000073,經濟金融,新英灣區,"洋浦經濟開發區 新英灣區 位於...",421
 ```
 
-**Design rationale**: No guardrails (length filtering, empty-stub removal) — intentional per project direction. The mega-file outlier is still a single BGE-M3 call in L2 (non-blocking); it is nearly certain to be excluded from the 100-file L3 sample (data-driven seed sampling is biased toward cross-domain concepts, not outliers).
+**Design rationale**: Initially none (intentional per project direction). Revised after `embed_files.py` sanity check exposed embedding collapse on short stubs (cos_sim=1.0000 across math/econ cross-domain pairs, caused by BGE-M3 generating near-identical vectors for very short texts). Now applies hard filters: `char_count < 50` or `unique_token_count < 5` → skip. Skipped stubs are tracked in `filtered_reason` column. The mega-file outlier is still embedded (single BGE-M3 call, non-blocking).
 
 ---
 
@@ -320,7 +320,7 @@ GraphRAG built-in token-bucket + `tenacity` exponential backoff: `max_retries: 1
 | **K-NN K value** | 15 (+ 1 self) | — | Balances local vs global neighborhood |
 | **Relation schema** | Fixed 6-type set | Open-vocabulary | Stable across runs; avoids type drift |
 | **Sampling strategy** | Seed-of-seed (PMI domain-name → neighbors → docs) | Random sampling | Ensures cross-domain bridge concepts are represented |
-| **Preprocessing guardrails** | None (intentional) | Length filters or empty-stub removal | User direction; mega-file outlier is excluded from L3 sample anyway |
+| **Preprocessing guardrails** | Hard filters (char_count<50, unique_token_count<5); skip stubs that cause embedding collapse | None (intentional) | Revised after L2 sanity exposed cosine=1.0 collapse on stubs; mega-file outlier still embedded (single BGE-M3 call, non-blocking) |
 | **Torch CUDA setup** | Manual wheel置换 (`setup_cuda_torch.sh`) | `uv pip install torch --index-url ...` | uv sync overwrites CUDA wheel back to CPU each time |
 | **NIM model** | qwen/qwen3.5-397b-a17b | deepseek-ai/deepseek-v3 | qwen available on NIM free endpoint; no separate deployment needed |
 

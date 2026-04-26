@@ -15,12 +15,13 @@ wheels/
 
 # Data
 data/
+analysis/
 *.parquet
 *.json
 *.log
 *.zip
 *.csv
-
+*.tar
 
 # Environment variables
 .env
@@ -34,5 +35,3 @@ graphrag_project/cache
 
 # Docs
 reports/
-scripts/report*
-scripts/test_nim.py

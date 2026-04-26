@@ -3,9 +3,14 @@ Evaluation: Sample 35 edges across all layers for manual inspection.
 Writes reports/eval_sample.md.
 
 Also computes Precision@K using hand-labeled gold pairs (src, dst, relation).
-Each gold pair is labeled as: concept-concept (L1/L3) or file-file (L2).
+Each gold pair is labeled as: concept or file
 For each gold pair (A, B), Precision@K = 1 if B appears in A's top-K neighbors, else 0.
 Aggregated over all gold pairs at each K.
+
+Gold pair type semantics:
+  - 'pmi-concept': use L1 PMI neighbors only (sorted by PMI desc)
+  - 'l3-concept': use L3 graphrag typed neighbors only (sorted by combined_degree desc)
+  - 'file': use L2 K-NN neighbors only (sorted by cos_sim desc)
 
 Sampling plan (35 edges):
   - 10 random L3 typed concept-concept edges
@@ -16,11 +21,10 @@ Sampling plan (35 edges):
 
 from pathlib import Path
 import random
-import json
+import pickle
 
 import pandas as pd
 import networkx as nx
-import pickle
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT_DIR = ROOT / "reports"
@@ -29,119 +33,122 @@ OUT_DIR.mkdir(exist_ok=True)
 random.seed(42)
 
 # ── Hand-labeled Gold Pairs for Precision@K ───────────────────────────────────
-# Format: (src, dst, label) — label is 'concept' or 'file'
-# Concepts: pairs from domain-set analysis and known L3 relations
-# Files: same-domain pairs (math/math or econ/econ) from high-confidence K-NN
+# Format: (src, dst, label)
+# 'pmi-concept': L1/L2 concept-concept verified by PMI (domain set + cross-domain)
+# 'l3-concept': L3 typed relation pairs — use Chinese entity titles (fuse_graph maps title→UUID)
+# 'file': same-domain K-NN file pairs
 GOLD_PAIRS = [
-    # Concept-concept pairs (L1 PMI verified, domain-related)
-    ("微積分", "微分", "concept"),
-    ("微積分", "函數", "concept"),
-    ("期望值", "機率", "concept"),
-    ("期望值", "隨機", "concept"),
-    ("機率", "隨機", "concept"),
-    ("利率", "通貨膨脹", "concept"),
-    ("通貨膨脹", "貨幣", "concept"),
-    ("銀行", "貨幣", "concept"),
-    ("投資", "交易", "concept"),
-    ("套利", "期望值", "concept"),
-    ("矩陣", "函數", "concept"),
-    ("微分", "矩陣", "concept"),
-    ("計量", "投資", "concept"),
-    ("數據", "通貨膨脹", "concept"),
-    ("隨機", "函數", "concept"),
-    # Cross-domain concept pairs (high PMI, different ratios)
-    ("微積分", "交易", "concept"),
-    ("期望值", "投資", "concept"),
-    ("函數", "貨幣", "concept"),
-    ("機率", "套利", "concept"),
-    ("矩陣", "銀行", "concept"),
-    # L3 typed relation pairs (defines, is-a, special-case-of, part-of)
-    ("皮耶·波爾", "布勞威爾不動點定理", "concept"),
-    ("角穀靜夫定理", "布勞威爾不動點定理", "concept"),
-    ("布勞威爾不動點定理", "代數拓撲", "concept"),
-    ("美聯儲", "貝爾斯登", "concept"),
-    ("格林斯潘", "信貸危機", "concept"),
-    ("聯邦房屋金融委員會", "聯邦房屋貸款銀行系統", "concept"),
+    # PMI concept-concept pairs (verified L1 neighbors)
+    ("微積分", "微分", "pmi-concept"),
+    ("微積分", "函數", "pmi-concept"),
+    ("期望值", "機率", "pmi-concept"),
+    ("期望值", "隨機", "pmi-concept"),
+    ("機率", "隨機", "pmi-concept"),
+    ("利率", "通貨膨脹", "pmi-concept"),
+    ("通貨膨脹", "貨幣", "pmi-concept"),
+    ("銀行", "貨幣", "pmi-concept"),
+    ("投資", "交易", "pmi-concept"),
+    ("套利", "期望值", "pmi-concept"),
+    ("矩陣", "函數", "pmi-concept"),
+    ("微分", "矩陣", "pmi-concept"),
+    ("計量", "投資", "pmi-concept"),
+    ("數據", "通貨膨脹", "pmi-concept"),
+    ("隨機", "函數", "pmi-concept"),
+    # Cross-domain PMI pairs
+    ("微積分", "交易", "pmi-concept"),
+    ("期望值", "投資", "pmi-concept"),
+    ("函數", "貨幣", "pmi-concept"),
+    ("機率", "套利", "pmi-concept"),
+    ("矩陣", "銀行", "pmi-concept"),
+    # L3 typed relation pairs (Chinese entity titles → UUID via fuse_graph reverse map)
+    ("皮耶·波爾", "布勞威爾不動點定理", "l3-concept"),
+    ("角穀靜夫定理", "布勞威爾不動點定理", "l3-concept"),
+    ("布勞威爾不動點定理", "代數拓撲", "l3-concept"),
+    ("美聯儲", "貝爾斯登", "l3-concept"),
+    ("格林斯潘", "信貸危機", "l3-concept"),
+    ("聯邦房屋金融委員會", "聯邦房屋貸款銀行系統", "l3-concept"),
+    ("布勞威爾不動點定理", "連續函數", "l3-concept"),
+    ("狄利克雷問題", "偏微分方程", "l3-concept"),
+    ("法伊特 - 湯普森定理", "奇階單群", "l3-concept"),
+    ("美聯儲", "定期招標工具", "l3-concept"),
+    ("美聯儲", "聯邦基金利率", "l3-concept"),
+    ("房利美", "MBS", "l3-concept"),
+    ("高盛", "MBS", "l3-concept"),
+    ("摩根大通", "貝爾斯登", "l3-concept"),
+    ("信貸危機", "瑞銀", "l3-concept"),
+    ("伯南克", "美聯儲", "l3-concept"),
     # File-file pairs (L2 K-NN, same-domain, high cosine)
-    # Math-math high similarity pairs
     (4545, 100410, "file"),
     (100410, 5290611, "file"),
-    # Econ-econ high similarity pairs
-    (1057405, 590120, "file"),  # "天領" vs "本間宗久" - cross-domain, keep for variety
-    # Math-math average similarity
     (101161, 20811, "file"),
     (101161, 5290611, "file"),
-    # More concept-concept from L3 relations
-    ("布勞威爾不動點定理", "連續函數", "concept"),
-    ("狄利克雷問題", "偏微分方程", "concept"),
-    ("法伊特 - 湯普森定理", "奇階單群", "concept"),
-    ("美聯儲", "定期招標工具", "concept"),
-    ("美聯儲", "聯邦基金利率", "concept"),
-    ("房利美", "MBS", "concept"),
-    ("高盛", "MBS", "concept"),
-    ("摩根大通", "貝爾斯登", "concept"),
-    ("信貸危機", "瑞銀", "concept"),
-    ("伯南克", "美聯儲", "concept"),
-    # File-file cross-domain (lower cos but meaningful)
-    # These are intentionally cross-domain to test cross-domain recall
 ]
 
 
 def compute_precision_at_k(G, gold_pairs, k_values=[1, 3, 5, 10, 20, 50]):
     """
     Compute Precision@K for gold pairs.
-    For concept pair (A, B): use L1 PMI neighbors of A (sorted by PMI desc)
-    For file pair (A, B): use L2 K-NN neighbors of A (sorted by cos_sim desc)
-    Precision@K for a pair = 1 if B in top-K neighbors of A, else 0.
+    For PMI-concept pair: use L1 PMI neighbors only (sorted by PMI desc).
+    For L3-concept pair: use L3 graphrag typed neighbors only (sorted by combined_degree desc).
+    For file pair: use L2 K-NN neighbors (sorted by cos_sim desc).
+    Precision@K = 1 if B in top-K neighbors of A, else 0.
     Returns dict: k -> (precision, count)
     """
+    # Build L3 title → entity_id reverse map from graph node attributes
+    l3_title_to_eid: dict[str, str] = {}
+    for nid in G.nodes:
+        attrs = G.nodes[nid]
+        if attrs.get("source") == "graphrag" and attrs.get("title"):
+            l3_title_to_eid[attrs["title"]] = nid
+
     results = {k: [] for k in k_values}
 
-    for src, dst, ptype in gold_pairs:
-        # Resolve file IDs to node IDs
-        if ptype == "file":
-            src_id = str(int(src)) if isinstance(src, (int, float)) else src
-            dst_id = str(int(dst)) if isinstance(dst, (int, float)) else dst
-        else:
-            src_id = src
-            dst_id = dst
+    for s_raw, d_raw, ptype in gold_pairs:
+        src_id: str
+        dst_id: str
 
-        # Skip if nodes not in graph
+        if ptype == "file":
+            src_id = str(int(float(s_raw))) if isinstance(s_raw, (int, float)) else str(s_raw)
+            dst_id = str(int(float(d_raw))) if isinstance(d_raw, (int, float)) else str(d_raw)
+        elif ptype == "l3-concept":
+            # Chinese entity title → UUID via reverse map (fuse_graph built this)
+            src_id = l3_title_to_eid.get(str(s_raw), str(s_raw))
+            dst_id = l3_title_to_eid.get(str(d_raw), str(d_raw))
+        else:
+            # 'pmi-concept': use title as-is
+            src_id = str(s_raw)
+            dst_id = str(d_raw)
+
         if src_id not in G:
             continue
 
-        neighbors = []
+        nbrs: list[tuple[str, float]] = []
         if ptype == "file":
-            # L2 K-NN neighbors — sort by cos_sim desc
-            for _, nbr, d in G.edges(src_id, data=True):
+            for _, n, d in G.edges(src_id, data=True):
                 if d.get("source") == "knn":
-                    neighbors.append((nbr, d.get("cos_sim", 0)))
+                    nbrs.append((n, d.get("cos_sim", 0)))
+        elif ptype == "l3-concept":
+            for _, n, d in G.edges(src_id, data=True):
+                if d.get("source") == "graphrag" and d.get("relation") is not None:
+                    nbrs.append((n, d.get("combined_degree", d.get("weight", 0))))
         else:
-            # L1 PMI neighbors — sort by PMI desc
-            for _, nbr, d in G.edges(src_id, data=True):
+            # L1 PMI concept neighbors ONLY — no graphrag mixing
+            for _, n, d in G.edges(src_id, data=True):
                 if d.get("source") == "pmi":
-                    neighbors.append((nbr, d.get("pmi", 0)))
-                elif d.get("source") == "graphrag":
-                    neighbors.append((nbr, d.get("weight", 0)))
+                    nbrs.append((n, d.get("pmi", 0)))
 
-        neighbors.sort(key=lambda x: x[1], reverse=True)
-        top_k = [n for n, _ in neighbors[:max(k_values)]]
+        nbrs.sort(key=lambda x: x[1], reverse=True)
+        top_k = [n for n, _ in nbrs[:max(k_values)]]
 
         for k in k_values:
-            if dst_id in top_k[:k]:
-                results[k].append(1)
-            else:
-                results[k].append(0)
+            results[k].append(1 if dst_id in top_k[:k] else 0)
 
-    # Compute precision for each k
     out = {}
     for k in k_values:
         vals = results[k]
-        if vals:
-            out[k] = (sum(vals) / len(vals), len(vals))
-        else:
-            out[k] = (0.0, 0)
+        out[k] = (sum(vals) / len(vals), len(vals)) if vals else (0.0, 0)
     return out
+
 
 # ── Load unified graph ─────────────────────────────────────────────────────────
 
@@ -157,15 +164,15 @@ print(f"  Graph: {G.number_of_nodes():,} nodes, {G.number_of_edges():,} edges")
 docs = pd.read_csv(ROOT / "processed" / "docs.csv", dtype={"id": str}, keep_default_na=False)
 l3_entities = pd.read_parquet(ROOT / "graphrag_project" / "output" / "entities.parquet")
 l3_relations = pd.read_parquet(ROOT / "graphrag_project" / "output" / "relationships.parquet")
-sample = pd.read_csv(ROOT / "processed" / "sample_100.csv", dtype={"id": str}, keep_default_na=False)
 
 # id → title lookup (for file nodes)
 id_to_title = dict(zip(docs["id"], docs["title"]))
 # id → domain lookup
 id_to_domain = dict(zip(docs["id"], docs["domain"]))
 
-# L3 entity id → title lookup
+# L3 entity id → title lookup (for display)
 entity_id_to_title = dict(zip(l3_entities["id"].astype(str), l3_entities["title"]))
+
 
 # ── Helper: file node info ─────────────────────────────────────────────────────
 
@@ -173,6 +180,7 @@ def file_info(node_id):
     title = id_to_title.get(node_id, node_id)
     domain = id_to_domain.get(node_id, "?")
     return f"{title} ({domain})"
+
 
 # ── Helper: concept node info ───────────────────────────────────────────────────
 
@@ -183,6 +191,7 @@ def concept_info(node_id):
         return f"{node_id[:16]}... [L3 entity: {attrs.get('title', attrs.get('entity_type', 'unknown'))}]"
     else:
         return f"{node_id} [L1 concept]"
+
 
 # ── Sample L3 typed edges ──────────────────────────────────────────────────────
 
@@ -204,7 +213,7 @@ print(f"  L2 K-NN edges: {len(l2_edges)}")
 
 l2_sample = random.sample(l2_edges, min(10, len(l2_edges)))
 
-# ── Sample cross-domain K-NN edges ──────────────────────────────────────────────
+# ── Sample cross-domain K-NN edges ─────────────────────────────────────────────
 
 cross_edges = [
     (u, v, d) for u, v, d in l2_edges
@@ -224,7 +233,7 @@ print(f"  L1 PMI edges: {len(l1_edges)}")
 
 l1_sample = random.sample(l1_edges, min(5, len(l1_edges)))
 
-# ── Build report ────────────────────────────────────────────────────────────────
+# ── Build report ───────────────────────────────────────────────────────────────
 
 lines = [
     "# Evaluation Sample — 35 Edges Across All Layers\n",
@@ -288,9 +297,11 @@ lines.append("## L1 PMI Edges (5) — Sanity\n\n")
 lines.append("| # | Concept A | Concept B | PMI | Co-doc Count | A Ratio (數學) | B Ratio (數學) |\n")
 lines.append("|---:|---|---|---:|---:|---:|---:|\n")
 
+
 def ratio_math(concept):
     attrs = G.nodes.get(concept, {})
     return attrs.get("domain_ratio_math", 0.5)
+
 
 for i, (u, v, d) in enumerate(l1_sample, 1):
     pmi = d.get("pmi", 0)
@@ -311,7 +322,7 @@ with open(out_path, "w", encoding="utf-8") as f:
 print(f"\nWritten: {out_path}")
 print(f"  L3: {len(l3_sample)} | L2: {len(l2_sample)} | Cross: {len(cross_sample)} | L1: {len(l1_sample)}")
 
-# ── Precision@K ────────────────────────────────────────────────────────────────
+# ── Precision@K ───────────────────────────────────────────────────────────────
 
 print("\nComputing Precision@K...")
 pk_results = compute_precision_at_k(G, GOLD_PAIRS, k_values=[1, 3, 5, 10, 20, 50])
@@ -320,24 +331,51 @@ precision_lines = [
     "\n---\n\n",
     "## Precision@K Evaluation\n\n",
     "Hand-labeled gold pairs used to evaluate retrieval quality across layers.\n",
+    "Types: 'pmi-concept' → L1 PMI neighbors only; 'l3-concept' → L3 graphrag typed neighbors only; 'file' → L2 K-NN neighbors only.\n",
     "For each gold pair (A, B), Precision@K = 1 if B appears in A's top-K neighbors, else 0.\n\n",
     "| K | Precision | # Evaluated |\n",
-    "|---:|---:|---:|\n",
+    "|---:|---:|\n",
 ]
 for k, (prec, count) in sorted(pk_results.items()):
     precision_lines.append(f"| {k} | {prec:.3f} | {count} |\n")
 
-# Also write detailed per-pair results
+# Per-pair detail
 detail_lines = [
     "\n### Gold Pair Details\n\n",
-    "| Source | Target | Type | In Graph? | Notes |\n",
+    "| Source | Target | Type | In Graph? | Top-10 Neighbors (truncated) |\n",
     "|---|---|---|---|---|\n",
 ]
-for src, dst, ptype in GOLD_PAIRS:
-    src_id = str(int(src)) if ptype == "file" and isinstance(src, (int, float)) else src
-    dst_id = str(int(dst)) if ptype == "file" and isinstance(dst, (int, float)) else dst
+for src_raw, dst_raw, ptype in GOLD_PAIRS:
+    if ptype == "file":
+        src_id = str(int(float(src_raw))) if isinstance(src_raw, (int, float)) else str(src_raw)
+        dst_id = str(int(float(dst_raw))) if isinstance(dst_raw, (int, float)) else str(dst_raw)
+    elif ptype == "l3-concept":
+        l3_title_to_eid = {
+            attrs["title"]: nid
+            for nid in G.nodes
+            if (attrs := G.nodes[nid]).get("source") == "graphrag" and attrs.get("title")
+        }
+        src_id = l3_title_to_eid.get(str(src_raw), str(src_raw))
+        dst_id = l3_title_to_eid.get(str(dst_raw), str(dst_raw))
+    else:
+        src_id = str(src_raw)
+        dst_id = str(dst_raw)
     in_graph = src_id in G
-    detail_lines.append(f"| {src_id} | {dst_id} | {ptype} | {in_graph} | |\n")
+
+    # Collect top-10 neighbors for debug
+    nbrs_sample = []
+    if src_id in G:
+        if ptype == "file":
+            edges = [(n, d.get("cos_sim", 0)) for _, n, d in G.edges(src_id, data=True) if d.get("source") == "knn"]
+        elif ptype == "l3-concept":
+            edges = [(n, d.get("combined_degree", 0)) for _, n, d in G.edges(src_id, data=True) if d.get("source") == "graphrag" and d.get("relation") is not None]
+        else:
+            edges = [(n, d.get("pmi", 0)) for _, n, d in G.edges(src_id, data=True) if d.get("source") == "pmi"]
+        edges.sort(key=lambda x: x[1], reverse=True)
+        nbrs_sample = [n for n, _ in edges[:10]]
+        nbrs_sample = nbrs_sample[:5]  # truncate for table width
+
+    detail_lines.append(f"| {src_id} | {dst_id} | {ptype} | {in_graph} | {nbrs_sample} |\n")
 
 print("Precision@K results:")
 for k, (prec, count) in sorted(pk_results.items()):
