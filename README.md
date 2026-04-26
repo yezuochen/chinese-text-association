@@ -48,6 +48,33 @@ processed/docs.csv
 
 L1 + L2 provide full-corpus coverage cheaply; L3 provides typed relations + communities on a concept-seeded sample.
 
+## Docker (Linux + GPU)
+
+```bash
+# Build image
+docker build -t association-analysis .
+
+# Export to shareable tar (~5 GB)
+docker save association-analysis -o association-analysis.tar
+
+# On user's machine: load image
+docker load -i association-analysis.tar
+
+# Prepare API keys
+cp config/user.env.example config/user.env
+# edit config/user.env with real keys
+
+# Run (mount data and output dirs)
+docker run --gpus all \
+  -v $(pwd)/data:/app/data \
+  -v $(pwd)/processed:/app/processed \
+  -v $(pwd)/analysis:/app/analysis \
+  --env-file config/user.env \
+  association-analysis
+```
+
+**Requirements:** Linux host with NVIDIA GPU + nvidia-docker runtime.
+
 ## Quick Start
 
 ```powershell
