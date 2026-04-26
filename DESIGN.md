@@ -43,8 +43,13 @@ pmi_graph.parquet  embeddings.parquet    ▼
 
 **Why three layers instead of one:**
 
-- **Cost / time constraint**: NIM free tier is 40 RPM; full-corpus GraphRAG would take ~40–80 hours wall-clock on the free tier (or ~US$150–200 on paid APIs).
-- **`encoding_format: null` incompatibility**: Microsoft's `fnllm` serializes `encoding_format: null` in embedding requests; NIM's strict validator rejects it. L3 internal embeddings route to OpenAI (which accepts `null`), bypassing the issue at the source. L2 uses local BGE-M3 in-process — neither requires NIM for embeddings.
+Each layer produces a graph that the others cannot replicate, and the combination enables retrieval that no single method achieves alone:
+
+- **L1 — PMI concept graph (10K corpus, free)**: captures lexical co-occurrence across all 9,943 documents — every shared vocabulary between any pair of math or economics articles, regardless of topic similarity. Coverage is maximal; structure is flat and untyped.
+- **L2 — BGE-M3 K-NN file graph (10K corpus, free)**: captures semantic similarity that lexical methods miss — two articles may be topically near without sharing any significant vocabulary. Dense embeddings filter out template noise and surface content-level affinity.
+- **L3 — GraphRAG typed knowledge graph (100-file sample, paid)**: captures typed relations (is-a, part-of, defines, used-in, special-case-of, related-to) that no co-occurrence or embedding method can infer. Entities and relations are grounded in specific text spans and LLM-generated community summaries.
+
+**Together**, L1 delivers breadth (concept recall), L2 delivers precision (semantic similarity), and L3 delivers structure (typed relational reasoning). A single-layer approach — whether pure PMI, pure embedding similarity, or pure GraphRAG on 10K — would have to sacrifice at least one of these three properties.
 
 ---
 
@@ -362,9 +367,64 @@ GraphRAG built-in token-bucket + `tenacity` exponential backoff: `max_retries: 1
 
 **⚠️ Long-running / paid steps must NOT be auto-executed from Claude Code.** Steps 2 (`embed_files.py`) and 9 (`graphrag index`) must be run by the user in a new terminal.
 
+## 11. Financial Generalization
+
+### 11.1 Why the architecture extends to live financial data
+
+The current pipeline operates on a static Wikipedia-style corpus of 9,943 articles (數學 + 經濟金融). The same three-layer architecture generalizes to live financial data with minor adaptations.
+
+### 11.2 Data source integration
+
+| Data Source | Format | Integration approach |
+|-------------|--------|----------------------|
+| **Bloomberg / Reuters** | Structured tickers + 中文新闻 | Append as new domain; entity extraction targets instruments (AAPL, TSMC) and macro events; relations ground in price/action semantics |
+| **Earnings reports (EDGAR / 公開資訊觀測站)** | XBRL / PDF text | Chunk at section level (Management Discussion, Financial Statements); attach company/ticker as metadata; L3 entity types expand to include 公司, 財務指標, 營收 |
+| **ETF / Futures / Options chains** | Structured tables (ISIN, expiry, strike, greeks) | Represent as typed entities (ETF name, contract month, strike price) with relations like `追蹤-index-of`, `履約價-underlies`, `delta-hedge-of`; populate L3 schema |
+| **News headlines** | Timestamped short text | Temporal PMI variant: rolling-window PMI (daily/weekly) to detect concept-level topic shifts; add time dimension to L1 edges |
+
+### 11.3 Key architectural changes for live data
+
+1. **Temporal awareness**: L1 currently uses static file-level co-occurrence. For live data, add a timestamp column to `docs.csv` and compute time-windowed PMI (e.g., weekly concept co-occurrence matrices). Directional PMI on financial news can approximate Granger-causal concept flow.
+
+2. **Entity typing expansion**: L3's fixed 6-relation schema is sufficient for the Wikipedia corpus. For financial data, extend entity types to `[金融商品, 公司, 指標, 法規, 人物, 事件]` and relation types to `[公告, 公布, 受影響, 追蹤, 履約, 對沖]` to capture the specific semantics of financial documents.
+
+3. **Cross-source file edges**: L2 K-NN edges currently span only the Wikipedia corpus. With multiple sources, cross-source similarity becomes meaningful — e.g., an earnings call transcript of TSMC vs. a Bloomberg macro article on semiconductor outlook — enabling a cross-source document graph bridging earnings, news, and equity research.
+
+4. **Sampling strategy adjustment**: Seed-of-seed sampling (currently PMI anchor concepts) would be replaced by stratified sampling over sectors (半導體, 金融, 製藥) or event types (財報發布, 央行會議, 併購) to ensure coverage of economically significant segments.
+
+5. **LLM cost management**: Live financial data at scale (e.g., 10,000 Bloomberg articles/day) would make L3 GraphRAG prohibitively expensive. Consider a hybrid: L1 PMI on daily batch, L2 BGE-M3 K-NN on daily batch, L3 GraphRAG only on high-signal events (earnings surprises, Fed decisions) identified via L1/L2 anomaly scoring.
+
+### 11.4 What stays the same
+
+- **L1 (PMI)**: No architecture change; retrain on new corpus with domain-specific stopwords (e.g., "公布", "本報告", "根據" for financial text).
+- **L2 (BGE-M3)**: Model unchanged; re-embed new documents on the same BGE-M3 infrastructure.
+- **L3 (GraphRAG)**: Model unchanged; re-run on new sample with updated entity/prompt configuration for financial domain.
+- **Fusion**: Same NetworkX fusion strategy; only node/edge schema updates.
+
 ---
 
-## 11. Verification Checkpoints
+## 12. Execution Order
+
+```
+0. uv sync
+   ⚠️ bash setup_cuda_torch.sh          # run after every uv sync
+1. uv run python src/preprocess.py      # ~1 min → docs.csv
+2. uv run python src/embed_files.py    # ⚠️ ~80 min on GPU (new terminal)
+3. uv run python src/build_knn.py       # <1 min → knn_graph.parquet
+4. uv run python src/build_pmi.py       # ~3 min → pmi_graph.parquet
+4b. uv run python src/build_directional_pmi.py  # ~3 min → directional_pmi.parquet
+5. uv run python src/sample_100.py       # <1 min → sample_100.csv
+6. uv run graphrag init --root .\graphrag_project  # one-off
+7. uv run graphrag prompt-tune ...      # one-off, ~5 min
+8. Manually edit prompts/entity_extraction.txt to lock 6-relation schema
+9. uv run graphrag index --root .\graphrag_project  # ⚠️ ~45 min, ~US$0.05 (new terminal)
+10. uv run python src/fuse_graph.py     # ~5 min → unified_graph.pkl
+11. uv run python src/eval.py           # <1 min → reports/eval_sample.md
+```
+
+**⚠️ Long-running / paid steps must NOT be auto-executed from Claude Code.** Steps 2 (`embed_files.py`) and 9 (`graphrag index`) must be run by the user in a new terminal.
+
+### Verification Checkpoints
 
 | Step | Verification |
 |------|-------------|

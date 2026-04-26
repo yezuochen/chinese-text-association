@@ -5,61 +5,10 @@ Uses the same BGE-M3 model that would run on an infinity server.
 Output: analysis/embeddings.parquet  (id, domain, title, embedding)
 """
 
-# MUST be first — clear any previously-cached broken transformers/accelerate
-# modules (they crashed at import time with None torch version and are now
-# permanently broken in sys.modules). Removing them lets Python re-import
-# fresh copies.
-import sys
-
-for mod in list(sys.modules.keys()):
-    if "transformers" in mod or "accelerate" in mod:
-        del sys.modules[mod]
-
-# Patch importlib.metadata.version FIRST, before any other imports.
-# On this system, importlib.metadata.version('torch') returns None because
-# torch's RECORD file is broken (OneDrive + Python 3.11 interaction).
-# transformers and accelerate call version.parse(version("torch")) internally,
-# which crashes on None unless we handle it.
-import importlib.metadata
-
-_dists_map = {d.name: d for d in importlib.metadata.distributions()}
-_orig_version = importlib.metadata.version
-
-
-def _patched_version(name: str):
-    if name in _dists_map:
-        return _dists_map[name].version
-    return _orig_version(name)
-
-
-importlib.metadata.version = _patched_version
-
-# Also patch packaging.version.parse to handle None gracefully.
-# This is the second crash site: version.parse(None) raises TypeError.
-import packaging.version
-
-_orig_parse = packaging.version.parse
-
-
-def _patched_parse(version_string):
-    if version_string is None:
-        return packaging.version.Version("0.0.0")
-    return _orig_parse(version_string)
-
-
-packaging.version.parse = _patched_parse
-
-# Patch check_torch_load_is_safe to not raise — we use weights_only=True
-# but transformers 4.57 requires torch>=2.6 for torch.load safety.
-# We pass weights_only=True and don't load any untrusted checkpoints,
-# so this check is unnecessary for our use case.
-# Note: modeling_utils does `from .utils.import_utils import check_torch_load_is_safe`
-# which creates a local binding, so we must patch it in both modules.
-import transformers.utils.import_utils
-import transformers.modeling_utils
-
-transformers.utils.import_utils.check_torch_load_is_safe = lambda: None
-transformers.modeling_utils.check_torch_load_is_safe = lambda: None
+# Apply local environment patches BEFORE any other imports.
+# See scripts/local_workaround.py for details on what/why.
+from scripts.local_workaround import apply_patches
+apply_patches()
 
 from pathlib import Path
 from time import monotonic

@@ -43,7 +43,8 @@ STOPWORDS = {
 # via the anchor-neighbor approach (find cross-domain PMI neighbors of these
 # domain-name terms, rank those neighbors by PMI degree, use as seeds).
 # STOPWORDS still excludes: wiki, zh, hant, cn (boilerplate leakage).
-STOPWORDS |= {"wiki", "zh", "hant", "cn", "參考", "連結", "研究", "外部", "發展", "主要", "大學", "問題", "學家", "其中", "文獻", "政府", "國家", "社會", "公司", "教授", "理論", "方法", "包括"}
+# 僅適用於 wiki domain，金融語料須移除
+STOPWORDS |= {"wiki", "zh", "hant", "cn", "參考", "連結"}
 
 # English tokens that leak into Chinese Wikipedia articles (LaTeX, math notation, titles)
 STOPWORDS |= {
